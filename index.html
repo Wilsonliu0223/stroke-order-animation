@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>筆畫順序動畫</title>
+    <style>
+        #animation-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 20px auto;
+            margin-top: 0; /* 確保靠近輸入欄 */
+        }
+        .character-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0.3; /* 設定透明度 */
+        }
+        .controls {
+            text-align: center;
+            margin-top: 20px;
+        }
+        input[type="text"] {
+            font-size: 20px;
+            padding: 10px;
+            width: 80%;
+            margin-bottom: 10px; /* 調整邊距 */
+        }
+        input[type="range"] {
+            width: 60%; /* 調整拉桿寬度 */
+            margin: 10px 5%;
+        }
+        button {
+            font-size: 20px;
+            padding: 10px;
+            margin: 5px;
+        }
+        #handwriting-canvas {
+            border: 1px solid black;
+            background-color: transparent;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .speed-label {
+            display: inline-block;
+            width: 10%; /* 調整標籤寬度 */
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <input type="text" id="inputText" placeholder="輸入中文字">
+        <button onclick="startAnimation()">顯示筆畫順序</button>
+        <br>
+        <span class="speed-label">慢</span>
+        <input type="range" id="speedRange" min="100" max="2000" step="100" value="500" onchange="updateSpeed()">
+        <span class="speed-label">快</span>
+    </div>
+    <div id="animation-container">
+        <canvas id="handwriting-canvas"></canvas>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@2.0.0/dist/hanzi-writer.min.js"></script>
+    <script>
+        let currentIndex = 0;
+        let characters = [];
+        let writer;
+        let strokeDelay = 500; // 初始的筆畫延遲時間
+
+        function updateSpeed() {
+            const speedRange = document.getElementById('speedRange');
+            strokeDelay = 2000 - parseInt(speedRange.value); // 更新延遲計算方式
+        }
+
+        async function startAnimation() {
+            const container = document.getElementById('animation-container');
+            container.innerHTML = '<canvas id="handwriting-canvas" width="300" height="300"></canvas>';
+            const inputText = document.getElementById('inputText').value;
+            characters = inputText.split('');
+            currentIndex = 0;
+            drawNextCharacter();
+        }
+
+        function drawNextCharacter() {
+            if (currentIndex < characters.length) {
+                const container = document.getElementById('animation-container');
+                container.innerHTML = ''; // 清空先前的字
+
+                const charContainer = document.createElement('div');
+                charContainer.className = 'character-container';
+                charContainer.id = 'character-' + currentIndex;
+                container.appendChild(charContainer);
+                
+                const canvas = document.createElement('canvas');
+                canvas.id = 'handwriting-canvas';
+                canvas.width = 300;
+                canvas.height = 300;
+                container.appendChild(canvas);
+
+                writer = HanziWriter.create(charContainer.id, characters[currentIndex], {
+                    width: 300,
+                    height: 300,
+                    padding: 10,
+                    strokeColor: '#000000', // 將筆畫顏色改回黑色
+                    delayBetweenStrokes: strokeDelay,
+                });
+
+                writer.animateCharacter({
+                    onComplete: () => {
+                        speakText(characters[currentIndex]); // 朗讀當前字
+                        currentIndex++;
+                        drawNextCharacter();
+                    }
+                });
+
+                // Handwriting Canvas
+                const ctx = canvas.getContext('2d');
+                let isDrawing = false;
+
+                function getCanvasOffset(e) {
+                    const rect = canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    return { x, y };
+                }
+
+                // 支援觸摸事件
+                canvas.addEventListener('touchstart', (e) => {
+                    const offset = getCanvasOffset(e.touches[0]);
+                    isDrawing = true;
+                    ctx.beginPath();
+                    ctx.moveTo(offset.x, offset.y);
+                });
+
+                canvas.addEventListener('touchmove', (e) => {
+                    if (isDrawing) {
+                        const offset = getCanvasOffset(e.touches[0]);
+                        ctx.lineTo(offset.x, offset.y);
+                        ctx.strokeStyle = 'red'; // 將手寫顯示改成紅色線條
+                        ctx.lineWidth = 4; // 調整紅色線條的粗細
+                        ctx.stroke();
+                    }
+                    e.preventDefault(); // 防止螢幕上下滑動
+                });
+
+                canvas.addEventListener('touchend', () => {
+                    isDrawing = false;
+                    ctx.closePath();
+                });
+
+                canvas.addEventListener('touchcancel', () => {
+                    isDrawing = false;
+                    ctx.closePath();
+                });
+
+                // 支援滑鼠事件
+                canvas.addEventListener('mousedown', (e) => {
+                    const offset = getCanvasOffset(e);
+                    isDrawing = true;
+                    ctx.beginPath();
+                    ctx.moveTo(offset.x, offset.y);
+                });
+
+                canvas.addEventListener('mousemove', (e) => {
+                    if (isDrawing) {
+                        const offset = getCanvasOffset(e);
+                        ctx.lineTo(offset.x, offset.y);
+                        ctx.strokeStyle = 'red'; // 將手寫顯示改成紅色線條
+                        ctx.lineWidth = 4; // 調整紅色線條的粗細
+                        ctx.stroke();
+                    }
+                });
+
+                canvas.addEventListener('mouseup', () => {
+                    isDrawing = false;
+                    ctx.closePath();
+                });
+
+                canvas.addEventListener('mouseout', () => {
+                    isDrawing = false;
+                    ctx.closePath();
+                });
+            }
+        }
+
+        function clearCanvas() {
+            const canvas = document.getElementById('handwriting-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function speakText(text) {
+            const synth = window.speechSynthesis;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'zh-TW';
+            synth.speak(utterance);
+        }
+    </script>
+</body>
+</html>
